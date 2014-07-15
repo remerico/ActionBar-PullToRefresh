@@ -1,9 +1,4 @@
-## This is a fork of Chris Banes' ActionBar-PullToRefresh library, except it uses SwipeProgressView from Android Support library instead of SmoothProgressBar library.
-
----
-
-
-# ActionBar-PullToRefresh
+# ActionBar-PullToRefresh (with SwipeProgressView)
 
 ActionBar-PullToRefresh provides an easy way to add a modern version of the pull-to-refresh interaction to your application.
 
