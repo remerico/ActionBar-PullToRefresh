@@ -34,11 +34,11 @@
 
     </FrameLayout>
 
-    <fr.castorflex.android.smoothprogressbar.SmoothProgressBar
+    <ph.com.sulit.app.libraries.pulltorefresh.SwipeProgressBarView
         android:id="@id/ptr_progress"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:minHeight="@dimen/ptr_progress_bar_stroke_width"/>
-
+        android:layout_alignBottom="@+id/ptr_content"
+        android:layout_height="@dimen/ptr_progress_bar_stroke_width" />
+    
 </RelativeLayout>
 

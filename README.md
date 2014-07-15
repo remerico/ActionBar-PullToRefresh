@@ -1,17 +1,11 @@
-# PLEASE NOTE, THIS PROJECT IS NO LONGER BEING MAINTAINED
+## This is a fork of Chris Banes' ActionBar-PullToRefresh library, except it uses SwipeProgressView from Android Support library instead of SmoothProgressBar library.
 
-* * *
+---
+
 
 # ActionBar-PullToRefresh
 
-![ActionBar-PullToRefresh](https://github.com/chrisbanes/ActionBar-PullToRefresh/raw/master/header.png)
-
 ActionBar-PullToRefresh provides an easy way to add a modern version of the pull-to-refresh interaction to your application.
-
-Please note that this is __not__ an update to [Android-PullToRefresh](https://github.com/chrisbanes/Android-PullToRefresh), this has been created from new. You should think of this as Android-PullToRefresh's younger, leaner cousin.
-
-### This is a Preview
-Please note that this is currently in a preview state. This basically means that the API is not fixed and you should expect changes between releases.
 
 ---
 

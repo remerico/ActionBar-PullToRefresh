@@ -1,71 +1,53 @@
-/*
- * Copyright 2013 Chris Banes
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package uk.co.senab.actionbarpulltorefresh.library;
 
-import android.animation.Animator;
-import android.animation.AnimatorListenerAdapter;
-import android.animation.AnimatorSet;
-import android.animation.ObjectAnimator;
+import uk.co.senab.actionbarpulltorefresh.library.sdk.Compat;
+import uk.co.senab.actionbarpulltorefresh.library.views.SwipeProgressBarView;
+import android.annotation.TargetApi;
 import android.app.Activity;
 import android.content.Context;
 import android.content.res.Configuration;
 import android.content.res.TypedArray;
 import android.graphics.PixelFormat;
-import android.graphics.drawable.ClipDrawable;
 import android.graphics.drawable.Drawable;
-import android.graphics.drawable.ShapeDrawable;
-import android.graphics.drawable.shapes.RectShape;
 import android.os.Build;
 import android.util.TypedValue;
-import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.animation.AccelerateInterpolator;
 import android.view.animation.Interpolator;
-import android.widget.RelativeLayout;
 import android.widget.TextView;
 
-import fr.castorflex.android.smoothprogressbar.SmoothProgressBar;
-import uk.co.senab.actionbarpulltorefresh.library.sdk.Compat;
+import com.nineoldandroids.animation.Animator;
+import com.nineoldandroids.animation.AnimatorListenerAdapter;
+import com.nineoldandroids.animation.AnimatorSet;
+import com.nineoldandroids.animation.ObjectAnimator;
+import com.nineoldandroids.view.ViewHelper;
 
-/**
- * Default Header Transformer.
- */
+
+@TargetApi(Build.VERSION_CODES.HONEYCOMB)
 public class DefaultHeaderTransformer extends HeaderTransformer {
 
-    public static final int PROGRESS_BAR_STYLE_INSIDE = 0;
-    public static final int PROGRESS_BAR_STYLE_OUTSIDE = 1;
-
     private View mHeaderView;
-    private ViewGroup mContentLayout;
     private TextView mHeaderTextView;
-    private SmoothProgressBar mHeaderProgressBar;
+    private ViewGroup mContentLayout;
+    private SwipeProgressBarView mHeaderProgressBar;
 
     private CharSequence mPullRefreshLabel, mRefreshingLabel, mReleaseLabel;
 
     private int mProgressDrawableColor;
 
     private long mAnimationDuration;
-    private int mProgressBarStyle;
-    private int mProgressBarHeight = RelativeLayout.LayoutParams.WRAP_CONTENT;
+    private float mCurrentPercentage = 0f;
 
     private final Interpolator mInterpolator = new AccelerateInterpolator();
+    
+    protected int color1 = 0xB3000000;
+    protected int color2 = 0x80000000;
+    protected int color3 = 0x4d000000;
+    protected int color4 = 0x1a000000;
+    
 
-    protected DefaultHeaderTransformer() {
+    public DefaultHeaderTransformer() {
         final int min = getMinimumApiLevel();
         if (Build.VERSION.SDK_INT < min) {
             throw new IllegalStateException("This HeaderTransformer is designed to run on SDK "
@@ -73,13 +55,21 @@ public class DefaultHeaderTransformer extends HeaderTransformer {
                     + "+. If using ActionBarSherlock or ActionBarCompat you should use the appropriate provided extra.");
         }
     }
+    
+    public DefaultHeaderTransformer(int color1, int color2, int color3, int color4) {
+    	this();
+    	this.color1 = color1;
+    	this.color2 = color2;
+    	this.color3 = color3;
+    	this.color4 = color4;
+    }
 
     @Override
     public void onViewCreated(Activity activity, View headerView) {
         mHeaderView = headerView;
 
         // Get ProgressBar and TextView
-        mHeaderProgressBar = (SmoothProgressBar) headerView.findViewById(R.id.ptr_progress);
+        mHeaderProgressBar = (SwipeProgressBarView) headerView.findViewById(R.id.ptr_progress);
         mHeaderTextView = (TextView) headerView.findViewById(R.id.ptr_text);
         mContentLayout = (ViewGroup) headerView.findViewById(R.id.ptr_content);
 
@@ -94,15 +84,24 @@ public class DefaultHeaderTransformer extends HeaderTransformer {
         mProgressDrawableColor = activity.getResources()
                 .getColor(R.color.default_progress_bar_color);
 
+        
+		mHeaderProgressBar.setColorScheme(color1, color2, color3, color4);
+		
+		mHeaderProgressBar.setOnStopListener(new SwipeProgressBarView.OnStopListener() {
+			@Override
+			public void onStop() {
+				View headerView = getHeaderView();
+	            if (headerView != null) {
+	                headerView.setVisibility(View.GONE);
+	            }
+	            onReset();
+			}
+		});
+		
+
         // Setup the View styles
         setupViewsFromStyles(activity, headerView);
 
-        applyProgressBarStyle();
-
-        // Apply any custom ProgressBar colors and corner radius
-        applyProgressBarSettings();
-
-        // FIXME: I do not like this call here
         onReset();
     }
 
@@ -116,8 +115,9 @@ public class DefaultHeaderTransformer extends HeaderTransformer {
         // Reset Progress Bar
         if (mHeaderProgressBar != null) {
             mHeaderProgressBar.setVisibility(View.VISIBLE);
-            mHeaderProgressBar.setProgress(0);
-            mHeaderProgressBar.setIndeterminate(false);
+            mHeaderProgressBar.stop();
+            mHeaderProgressBar.setTriggerPercentage(0);
+            mCurrentPercentage = 0f;
         }
 
         // Reset Text View
@@ -131,6 +131,8 @@ public class DefaultHeaderTransformer extends HeaderTransformer {
             mContentLayout.setVisibility(View.VISIBLE);
             Compat.setAlpha(mContentLayout, 1f);
         }
+        
+        Compat.setAlpha(mHeaderView, 1f);
     }
 
     @Override
@@ -138,7 +140,8 @@ public class DefaultHeaderTransformer extends HeaderTransformer {
         if (mHeaderProgressBar != null) {
             mHeaderProgressBar.setVisibility(View.VISIBLE);
             final float progress = mInterpolator.getInterpolation(percentagePulled);
-            mHeaderProgressBar.setProgress(Math.round(mHeaderProgressBar.getMax() * progress));
+            mHeaderProgressBar.setTriggerPercentage(progress);
+            mCurrentPercentage = progress;
         }
     }
 
@@ -149,7 +152,7 @@ public class DefaultHeaderTransformer extends HeaderTransformer {
         }
         if (mHeaderProgressBar != null) {
             mHeaderProgressBar.setVisibility(View.VISIBLE);
-            mHeaderProgressBar.setIndeterminate(true);
+            mHeaderProgressBar.start();
         }
     }
 
@@ -159,7 +162,8 @@ public class DefaultHeaderTransformer extends HeaderTransformer {
             mHeaderTextView.setText(mReleaseLabel);
         }
         if (mHeaderProgressBar != null) {
-            mHeaderProgressBar.setProgress(mHeaderProgressBar.getMax());
+            mHeaderProgressBar.setTriggerPercentage(1f);
+            mCurrentPercentage = 1f;
         }
     }
 
@@ -167,7 +171,8 @@ public class DefaultHeaderTransformer extends HeaderTransformer {
     public void onRefreshMinimized() {
         // Here we fade out most of the header, leaving just the progress bar
         if (mContentLayout != null) {
-            ObjectAnimator.ofFloat(mContentLayout, "alpha", 1f, 0f).start();
+            //wObjectAnimator.ofFloat(mContentLayout, "alpha", 1f, 0f).start();
+            ObjectAnimator.ofFloat(mContentLayout, "translationY", 0f, -mContentLayout.getHeight()).start();
         }
     }
 
@@ -175,44 +180,72 @@ public class DefaultHeaderTransformer extends HeaderTransformer {
         return mHeaderView;
     }
 
-    @Override
+	@Override
     public boolean showHeaderView() {
         final boolean changeVis = mHeaderView.getVisibility() != View.VISIBLE;
 
         if (changeVis) {
             mHeaderView.setVisibility(View.VISIBLE);
+            Compat.setAlpha(mContentLayout, 1f);
+            Compat.setAlpha(mHeaderView, 1f);
+            
             AnimatorSet animSet = new AnimatorSet();
-            ObjectAnimator transAnim = ObjectAnimator.ofFloat(mContentLayout, "translationY",
-                    -mContentLayout.getHeight(), 0f);
-            ObjectAnimator alphaAnim = ObjectAnimator.ofFloat(mHeaderView, "alpha", 0f, 1f);
-            animSet.playTogether(transAnim, alphaAnim);
+            ObjectAnimator transAnim = ObjectAnimator.ofFloat(mContentLayout, "translationY", -mContentLayout.getHeight(), 0f);
+            
+            //ObjectAnimator alphaAnim = ObjectAnimator.ofFloat(mHeaderView, "alpha", 0f, 1f);
+            animSet.playTogether(transAnim /*, alphaAnim*/);
             animSet.setDuration(mAnimationDuration);
             animSet.start();
+            
         }
 
         return changeVis;
     }
 
-    @Override
+	@Override
     public boolean hideHeaderView() {
         final boolean changeVis = mHeaderView.getVisibility() != View.GONE;
 
         if (changeVis) {
             Animator animator;
-            if (mContentLayout.getAlpha() >= 0.5f) {
-                // If the content layout is showing, translate and fade out
-                animator = new AnimatorSet();
-                ObjectAnimator transAnim = ObjectAnimator.ofFloat(mContentLayout, "translationY",
-                        0f, -mContentLayout.getHeight());
-                ObjectAnimator alphaAnim = ObjectAnimator.ofFloat(mHeaderView, "alpha", 1f, 0f);
-                ((AnimatorSet) animator).playTogether(transAnim, alphaAnim);
+            
+            if (ViewHelper.getTranslationY(mContentLayout) == 0) {
+            //if (ViewCompat.getAlpha(mContentLayout) >= 0.5f) {
+                // If the content layout is showing, translate and fade out            	
+            	
+            	if (mHeaderProgressBar.isRunning()) {
+            		animator = ObjectAnimator.ofFloat(mContentLayout, "translationY", 0f, -mContentLayout.getHeight());
+            		mHeaderProgressBar.stop();
+            	}
+            	else {
+
+	                animator = new AnimatorSet();
+	                ObjectAnimator transAnim = ObjectAnimator.ofFloat(mContentLayout, "translationY", 0f, -mContentLayout.getHeight());
+	                ObjectAnimator alphaAnim = ObjectAnimator.ofFloat(mHeaderProgressBar, "triggerPercentage", mCurrentPercentage, 0f);
+	                
+	                ((AnimatorSet) animator).playTogether(transAnim, alphaAnim);
+	                
+	                animator.addListener(new HideAnimationCallback());
+            	}
+            	
+            	animator.setDuration(mAnimationDuration);
+                animator.start();
+            	
             } else {
                 // If the content layout isn't showing (minimized), just fade out
-                animator = ObjectAnimator.ofFloat(mHeaderView, "alpha", 1f, 0f);
+                
+                if (mHeaderProgressBar.isRunning()) {
+                	mHeaderProgressBar.stop();
+                }
+                else {
+                	animator = ObjectAnimator.ofFloat(mHeaderView, "alpha", 1f, 0f);
+                	animator.addListener(new HideAnimationCallback());
+                	animator.setDuration(mAnimationDuration);
+                    animator.start();
+                }
+                
             }
-            animator.setDuration(mAnimationDuration);
-            animator.addListener(new HideAnimationCallback());
-            animator.start();
+            
         }
 
         return changeVis;
@@ -229,31 +262,11 @@ public class DefaultHeaderTransformer extends HeaderTransformer {
     public void setProgressBarColor(int color) {
         if (color != mProgressDrawableColor) {
             mProgressDrawableColor = color;
-            mHeaderProgressBar.setSmoothProgressDrawableColor(color);
-            applyProgressBarSettings();
+//            applyProgressBarSettings();
         }
     }
 
-    /**
-     * Set the progress bar style. {@code style} must be one of {@link #PROGRESS_BAR_STYLE_OUTSIDE}
-     * or {@link #PROGRESS_BAR_STYLE_INSIDE}.
-     */
-    public void setProgressBarStyle(int style) {
-        if (mProgressBarStyle != style) {
-            mProgressBarStyle = style;
-            applyProgressBarStyle();
-        }
-    }
 
-    /**
-     * Set the progress bar height.
-     */
-    public void setProgressBarHeight(int height) {
-        if (mProgressBarHeight != height) {
-            mProgressBarHeight = height;
-            applyProgressBarStyle();
-        }
-    }
 
     /**
      * Set Text to show to prompt the user is pull (or keep pulling).
@@ -285,7 +298,8 @@ public class DefaultHeaderTransformer extends HeaderTransformer {
         mReleaseLabel = releaseText;
     }
 
-    private void setupViewsFromStyles(Activity activity, View headerView) {
+    @SuppressWarnings("deprecation")
+	private void setupViewsFromStyles(Activity activity, View headerView) {
         final TypedArray styleAttrs = obtainStyledAttrsFromThemeAttr(activity,
                 R.attr.ptrHeaderStyle, R.styleable.PullToRefreshHeader);
 
@@ -325,13 +339,12 @@ public class DefaultHeaderTransformer extends HeaderTransformer {
                     R.styleable.PullToRefreshHeader_ptrProgressBarColor, mProgressDrawableColor);
         }
 
-        mProgressBarStyle = styleAttrs.getInt(
-                R.styleable.PullToRefreshHeader_ptrProgressBarStyle, PROGRESS_BAR_STYLE_OUTSIDE);
-
-        if (styleAttrs.hasValue(R.styleable.PullToRefreshHeader_ptrProgressBarHeight)) {
+        /*
+        if(styleAttrs.hasValue(R.styleable.PullToRefreshHeader_ptrProgressBarHeight)) {
             mProgressBarHeight = styleAttrs.getDimensionPixelSize(
                     R.styleable.PullToRefreshHeader_ptrProgressBarHeight, mProgressBarHeight);
         }
+        */
 
         // Retrieve the text strings from the style (if they're set)
         if (styleAttrs.hasValue(R.styleable.PullToRefreshHeader_ptrPullText)) {
@@ -345,43 +358,9 @@ public class DefaultHeaderTransformer extends HeaderTransformer {
             mReleaseLabel = styleAttrs.getString(R.styleable.PullToRefreshHeader_ptrReleaseText);
         }
 
-        //SmoothProgressBar Style
-        if (styleAttrs.hasValue(R.styleable.PullToRefreshHeader_ptrSmoothProgressBarStyle)) {
-            int spbStyleRes = styleAttrs.getResourceId(R.styleable.PullToRefreshHeader_ptrSmoothProgressBarStyle, 0);
-            if (spbStyleRes != 0)
-                mHeaderProgressBar.applyStyle(spbStyleRes);
-
-        }
-
         styleAttrs.recycle();
     }
 
-    private void applyProgressBarStyle() {
-        RelativeLayout.LayoutParams lp = new RelativeLayout.LayoutParams(
-                RelativeLayout.LayoutParams.MATCH_PARENT, mProgressBarHeight);
-
-        switch (mProgressBarStyle) {
-            case PROGRESS_BAR_STYLE_INSIDE:
-                lp.addRule(RelativeLayout.ALIGN_BOTTOM, R.id.ptr_content);
-                break;
-            case PROGRESS_BAR_STYLE_OUTSIDE:
-                lp.addRule(RelativeLayout.BELOW, R.id.ptr_content);
-                break;
-        }
-
-        mHeaderProgressBar.setLayoutParams(lp);
-    }
-
-    private void applyProgressBarSettings() {
-        if (mHeaderProgressBar != null) {
-            ShapeDrawable shape = new ShapeDrawable();
-            shape.setShape(new RectShape());
-            shape.getPaint().setColor(mProgressDrawableColor);
-            ClipDrawable clipDrawable = new ClipDrawable(shape, Gravity.CENTER, ClipDrawable.HORIZONTAL);
-
-            mHeaderProgressBar.setProgressDrawable(clipDrawable);
-        }
-    }
 
     protected Drawable getActionBarBackground(Context context) {
         int[] android_styleable_ActionBar = {android.R.attr.background};
@@ -437,13 +416,14 @@ public class DefaultHeaderTransformer extends HeaderTransformer {
     }
 
     protected static TypedArray obtainStyledAttrsFromThemeAttr(Context context, int themeAttr,
-                                                               int[] styleAttrs) {
+            int[] styleAttrs) {
         // Need to get resource id of style pointed to from the theme attr
         TypedValue outValue = new TypedValue();
         context.getTheme().resolveAttribute(themeAttr, outValue, true);
-        final int styleResId = outValue.resourceId;
+        final int styleResId =  outValue.resourceId;
 
         // Now return the values (from styleAttrs) from the style
         return context.obtainStyledAttributes(styleResId, styleAttrs);
     }
+    
 }
